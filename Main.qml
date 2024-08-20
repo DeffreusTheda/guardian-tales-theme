@@ -26,11 +26,26 @@ Rectangle {
 	color: "black"
 	width: Window.width
 	height: Window.height
+	property var isFirstIteration: 1
+	property var firstIterationAdjusment: -250
+
+	//: Give time for gmstreamer to load the video
+	Timer {
+		id: loadingTimer
+		interval: 1000
+		running: true
+		onTriggered: {
+			showTitleTimer.running = true
+			buildupTimer.running = true
+			openingVideo.play()
+		}
+	}
 
 	//: Buildup timers
 	Timer {
-		interval: config.buildup=="false" ? 0 : 12680
-		running: true
+		id: buildupTimer
+		interval: config.buildup=="false" ? 0 : (12720 + loadingTimer.interval) // prev: 12680, 12750
+		running: false
 		onTriggered: {
 			centerColumn.visible = true
 			shutdown.visible = true
@@ -40,18 +55,21 @@ Rectangle {
 		}
 	}
 	Timer {
-		id: buildupTimer
-		interval: 12680; running: true
+		id: showTitleTimer
+		interval: 12720 - (isFirstIteration * firstIterationAdjusment) // prev: 12680, 12750
+		running: false
 		onTriggered: {
 			title.opacity = 1
 			titleLifespan.running = true
+			openingVideo.play()
 		}
 	}
 	//: Title lifespan
 	Timer {
 		id: titleLifespan
-		// 77710 (Start -> Hide) - 12680 (Start -> Title)
-		interval: 65030; running: false
+		// (Start -> Hide) - (Start -> Title) + (Adjustment)
+		interval: 77710 - showTitleTimer.interval + (isFirstIteration * loadingTimer.interval)
+		running: false
 		onTriggered: {
 			title.opacity = 0
 			titleDowntime.running = true
@@ -60,8 +78,9 @@ Rectangle {
 	//: Title downtime
 	Timer {
 		id: titleDowntime
-		// 12680 (Start -> Title) + 91008 (Total Duration) - 77710 (Start -> Hide)
-		interval: 25978; running: false
+		// (Start -> Title) + (Total Duration) - (Start -> Hide)
+		interval: showTitleTimer.interval + 91008 - 77710
+		running: false
 		onTriggered: {
 			title.opacity = 1
 			titleLifespan.running = true
@@ -76,21 +95,22 @@ Rectangle {
 
 	Video {
 		id: openingVideo
-		source: "ring-of-fortune.mp4"
-		autoPlay: true
+		source: "ring-of-fortune.webm"
+		autoPlay: false
 
 		width: Window.width
 		height: Window.height
 		fillMode: VideoOutput.PreserveAspectCrop
 
 		muted: false
-		volume: 0.25
+		volume: 0.3
 
 		onStopped: {
-			buildupTimer.running = true
+			showTitleTimer.running = true
 			titleLifespan.running = false
 			titleDowntime.running = false
 			openingVideo.play()
+			isFirstIteration = 0;
 		}
 	}
 
@@ -128,7 +148,7 @@ Rectangle {
 		}
 
 		Timer {
-			interval: 1000
+			interval: 500
 			repeat: true
 			running: true
 			onTriggered: {
